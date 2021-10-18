@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: traffic
+  name: traffic
+spec:
+  selector:
+    matchLabels:
+      app: traffic
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/inject: "false"
+      labels:
+        app: traffic
+    spec:
+      containers:
+      - command:
+        - sh
+        - -c
+        - |
+          while true; do
+            curl -vk http://bookinfo.tetrate.com/productpage
+            sleep 1
+          done
+        image: curlimages/curl:7.75.0
+        imagePullPolicy: IfNotPresent
+        name: traffic-bookinfo-ocp-productpage
+      hostAliases:
+      - hostnames:
+        - bookinfo.tetrate.com
+        ip: 192.168.64.223

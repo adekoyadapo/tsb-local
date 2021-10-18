@@ -1,0 +1,16 @@
+apiVersion: v1
+data:
+  config: |
+    address-pools:
+    - name: default
+      protocol: layer2
+      addresses:
+      - 192.168.64.141-192.168.64.160
+    - name: tsb
+      protocol: layer2
+      addresses:
+      - 192.168.64.161-192.168.64.180
+kind: ConfigMap
+metadata:
+  name: config
+  namespace: metallb-system

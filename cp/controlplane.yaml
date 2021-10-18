@@ -1,0 +1,39 @@
+---
+apiVersion: install.tetrate.io/v1alpha1
+kind: ControlPlane
+metadata:
+  name: controlplane
+  namespace: istio-system
+spec:
+  hub: ${registry}
+  telemetryStore:
+    elastic:
+      host: ${elastic_host}
+      port: 9200
+      version: 7
+      protocol: https
+      selfSigned: true
+  managementPlane:
+    host: ${tctl_host}
+    port: 8443
+    clusterName: ${cluster_name}
+  meshExpansion: {}
+  components:
+    xcp:
+      kubeSpec:
+        overlays:
+        - apiVersion: install.xcp.tetrate.io/v1alpha1
+          kind: EdgeXcp
+          name: edge-xcp
+          patches:
+          - path: spec.components.centralServer.kubeSpec.service.annotations
+            value:
+              metallb.universe.tf/address-pool: tsb
+          - path: spec.components.edgeServer.kubeSpec.overlays
+            value:
+            - apiVersion: v1
+              kind: Service
+              name: xcp-edge
+              patches:
+              - path: spec.type
+                value: LoadBalancer

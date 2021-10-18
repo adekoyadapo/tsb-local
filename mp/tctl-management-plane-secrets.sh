@@ -1,0 +1,13 @@
+ /usr/local/bin/tctl install manifest management-plane-secrets \
+  --elastic-password "$(kubectl get secret tsb-es-elastic-user -o go-template='{{.data.elastic | base64decode}}' -n elastic-system)" \
+  --elastic-username elastic \
+  --elastic-ca-certificate "$(kubectl get secret -n elastic-system tsb-es-http-ca-internal -o go-template='{{index .data "tls.crt" | base64decode}}')" \
+  --ldap-bind-dn cn=admin,dc=tetrate,dc=io \
+  --ldap-bind-password admin \
+  --managementplane tsb \
+  --postgres-password tsb-postgres-password \
+  --postgres-username tsb \
+  --tsb-admin-password admin \
+  --tsb-server-certificate "$(kubectl get secret -n tsb tsb-server-cert -o go-template='{{index .data "tls.crt" | base64decode}}')" \
+  --tsb-server-key "$(kubectl get secret -n tsb tsb-server-cert  -o go-template='{{index .data "tls.key" | base64decode}}')" \
+  --xcp-certs > mp/tctl/managementplanesecrets.yaml

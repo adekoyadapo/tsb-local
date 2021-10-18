@@ -1,0 +1,8 @@
+---
+apiVersion: api.tsb.tetrate.io/v2
+kind: Cluster
+metadata:
+  name: ${cluster_name}
+  organization: ${organization}
+spec:
+  tokenTtl: "8760h"
