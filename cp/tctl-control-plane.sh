@@ -11,7 +11,7 @@ es_password=$(kubectl get secret elastic-credentials -n tsb -o jsonpath={.data.p
 es_username=$(kubectl get secret elastic-credentials -n tsb -o jsonpath={.data.username} | base64 -d)
 es_cacert=$(kubectl get secret es-certs -n tsb -o json | jq -r '.data["ca.crt"]' | base64 -d)
 tctl_host=$(kubectl -n tsb get service envoy -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-mp_cluster_name=mp
+mp_cluster_name=tsb
 
 # tctl setup
 tctl config clusters set default --bridge-address ${tctl_host}:8443 --tls-insecure

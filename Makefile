@@ -18,7 +18,12 @@ mgt: check-env
 		&& sleep 20 && kubectl apply -f mp/metallb-config.yaml
 mgt-prereq:
 	kubectx mp;
-	kubectl apply -f cert-manager/cert-manager.yaml;
+	helm repo add jetstack https://charts.jetstack.io;
+	helm upgrade certmanager -n  cert-manager jetstack/cert-manager \
+		--namespace cert-manager \
+		--create-namespace \
+		--set installCRDs=true;
+#	kubectl apply -f cert-manager/cert-manager.yaml;
 	kubectl wait --for=condition=available --timeout=200s --all deployments -n cert-manager;
 	kubectl apply -f elastic/eck-all-in-one.yaml;
 	kubectl wait --for=condition=ready --timeout=200s --all pods -n elastic-system;
@@ -51,7 +56,7 @@ ctr: check-env
 
 
 #elastic_host_ip:
-#	shell kubectl -n elastic-system get service tsb-es-http -o jsonpath={.status.loadBalancer.ingress[0].ip}
+#	shell kubectl -n elastic-system get service tsb-es-http -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
 tctl_host :=$(shell kubectl -n tsb get service envoy -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
 cp-setup:
 	cp/tctl-control-plane.sh;
@@ -70,6 +75,25 @@ destroy_mp:
 	kubectl delete -f mp/elastic/es.yaml --wait=true;
 	kubectl delete -f mp/elastic/eck-all-in-one.yaml --wait=true;
 	kubectl delete -f mp/cert-manager/certmanager.yaml --wait=true;
+
+bookinfo_app:
+	kubectx cp;
+	kubectl create namespace bookinfo;
+	kubectl label ns bookinfo istio-injection=enabled --overwrite;
+	kubectl apply -f tsb/bookinfo.yml -n bookinfo;
+	kubectl apply -f tsb/ingress.yaml -n bookinfo;
+	kubectl create secret tls bookinfo-certs \
+		--key tsb/bookinfo.key \
+		--cert tsb/bookinfo.crt -n bookinfo;
+	tctl apply -f tsb/tenant.yaml;
+	tctl apply -f tsb/workspace.yaml
+	tctl apply -f tsb/groups.yaml;
+	tctl apply -f tsb/gateway.yaml;
+
+bookinfo_gw :=$(shell kubectl -n bookinfo get service tsb-gateway-bookinfo -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+traffic_gen:
+	kubectx cp
+	@envsubst < tsb/traffic-gen.yaml | kubectl apply -f -;
 
 test:
 #	elastic_host="$(shell 'kubectl -n elastic-system get service tsb-es-http -o jsonpath={.status.loadBalancer.ingress[0].ip}')"

@@ -30,4 +30,4 @@ spec:
       hostAliases:
       - hostnames:
         - bookinfo.tetrate.com
-        ip: 192.168.64.223
+        ip: ${bookinfo_gw}
