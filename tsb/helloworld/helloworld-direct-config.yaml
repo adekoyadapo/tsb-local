@@ -1,0 +1,128 @@
+---
+apiversion: api.tsb.tetrate.io/v2
+kind: Workspace
+metadata:
+  organization: tetrate
+  tenant: tetrate
+  name: helloworld
+spec:
+  displayName: Helloworld
+  description: Helloworld application
+  namespaceSelector:
+    names:
+      - "*/helloworld"
+---
+apiVersion: gateway.tsb.tetrate.io/v2
+kind: Group
+metadata:
+  name: direct
+  organization: tetrate
+  tenant: tetrate
+  workspace: helloworld
+spec:
+  displayName: direct configuration
+  configMode: DIRECT
+  namespaceSelector:
+    names:
+    - "*/helloworld"
+---
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: helloworld-gateway
+  namespace: helloworld
+  annotations:
+    tsb.tetrate.io/gatewayGroup: direct
+    tsb.tetrate.io/workspace: helloworld
+    tsb.tetrate.io/organization: tetrate
+    tsb.tetrate.io/tenant: tetrate
+spec:
+  selector:
+    app: helloworld-gateway
+    istio: ingressgateway
+  servers:
+  - hosts:
+    - hello.world
+    port:
+      name: https
+      number: 443
+      protocol: HTTPS
+    tls:
+      mode: SIMPLE
+      credentialName: helloworld-certs
+  - hosts:
+    - direct.hello.world
+    port:
+      name: http
+      number: 80
+      protocol: HTTP
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: helloworld-direct-vs
+  namespace: helloworld
+  annotations:
+    tsb.tetrate.io/gatewayGroup: direct
+    tsb.tetrate.io/workspace: helloworld
+    tsb.tetrate.io/organization: tetrate
+    tsb.tetrate.io/tenant: tetrate
+spec:
+  gateways:
+  - helloworld/helloworld-gateway
+  hosts:
+  - hello.world
+  - direct.hello.world
+  http:
+  - route:
+    - destination:
+        host: helloworld.helloworld.svc.cluster.local
+        port:
+          number: 5000
+        subset: v1
+      weight: 25
+    - destination:
+        host: helloworld.helloworld.svc.cluster.local
+        port:
+          number: 5000
+        subset: v2
+      weight: 75
+    fault:
+      abort:
+        httpStatus: 503
+        percentage:
+          value: 10.0
+---
+apiVersion: traffic.tsb.tetrate.io/v2
+kind: Group
+metadata:
+  name: direct
+  organization: tetrate
+  tenant: tetrate
+  workspace: helloworld
+spec:
+  displayName: direct configuration
+  configMode: DIRECT
+  namespaceSelector:
+    names:
+    - "*/helloworld"
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: helloworld-direct-dr
+  namespace: helloworld
+  annotations:
+    tsb.tetrate.io/trafficGroup: direct
+    tsb.tetrate.io/workspace: helloworld
+    tsb.tetrate.io/organization: tetrate
+    tsb.tetrate.io/tenant: tetrate
+spec:
+  host: helloworld.helloworld.svc.cluster.local
+  subsets:
+  - name: v1
+    labels:
+      version: v1
+  - name: v2
+    labels:
+      version: v2

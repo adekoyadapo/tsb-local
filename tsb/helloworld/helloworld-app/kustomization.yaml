@@ -1,0 +1,13 @@
+resources:
+  - helloworld-app.yaml
+  - ingress-gateway.yaml
+
+generatorOptions:
+  disableNameSuffixHash: true
+
+secretGenerator:
+  - name: helloworld-certs
+    type: "kubernetes.io/tls"
+    files:
+      - tls.crt=certs/helloworld.crt
+      - tls.key=certs/helloworld.key

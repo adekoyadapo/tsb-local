@@ -6,7 +6,6 @@ tctl_password=admin
 tctl_tenant=minikube
 cluster_name=cp
 # elastic
-kubectx mp
 es_password=$(kubectl get secret elastic-credentials -n tsb -o jsonpath={.data.password} | base64 -d)
 es_username=$(kubectl get secret elastic-credentials -n tsb -o jsonpath={.data.username} | base64 -d)
 es_cacert=$(kubectl get secret es-certs -n tsb -o json | jq -r '.data["ca.crt"]' | base64 -d)
@@ -19,8 +18,8 @@ tctl config users set admin --org ${tctl_org} --username ${tctl_username} --pass
 tctl config profiles set default --cluster="default" --username=${tctl_password}
 tctl config profiles set-current "default"
 tctl apply -f cp/${cluster_name}-cluster.yaml
+sleep 5
 tctl install manifest cluster-operators --registry ${registry} > cp/tctl/${cluster_name}-clusteroperators.yaml
-kubectx mp
 tctl install manifest control-plane-secrets \
     --elastic-password ${es_password} \
     --elastic-username ${es_username} \

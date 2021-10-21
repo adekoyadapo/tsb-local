@@ -1,0 +1,140 @@
+---
+apiversion: api.tsb.tetrate.io/v2
+kind: Workspace
+metadata:
+  organization: tetrate
+  tenant: tetrate
+  name: helloworld
+spec:
+  displayName: Helloworld
+  description: Helloworld application
+  namespaceSelector:
+    names:
+      - "*/helloworld"
+---
+apiVersion: gateway.tsb.tetrate.io/v2
+kind: Group
+metadata:
+  name: helloworld
+  workspace: helloworld
+  tenant: tetrate
+  organization: tetrate
+spec:
+  displayName: Helloworld gateways
+  description: Helloworld ingress configuration
+  namespaceSelector:
+    names:
+      - "*/helloworld"
+  configMode: BRIDGED
+---
+apiVersion: traffic.tsb.tetrate.io/v2
+kind: Group
+metadata:
+  name: helloworld
+  workspace: helloworld
+  tenant: tetrate
+  organization: tetrate
+spec:
+  displayName: Helloworld traffic
+  description: Helloworld traffic configuration
+  namespaceSelector:
+    names:
+      - "*/helloworld"
+  configMode: BRIDGED
+---
+apiVersion: security.tsb.tetrate.io/v2
+kind: Group
+metadata:
+  name: helloworld
+  workspace: helloworld
+  tenant: tetrate
+  organization: tetrate
+spec:
+  displayName: Helloworld security
+  description: Helloworld security configuration
+  namespaceSelector:
+    names:
+      - "*/helloworld"
+  configMode: BRIDGED
+---
+apiVersion: gateway.tsb.tetrate.io/v2
+kind: IngressGateway
+metadata:
+  organization: tetrate
+  tenant: tetrate
+  workspace: helloworld
+  group: helloworld
+  name: helloworld
+spec:
+  workloadSelector:
+    namespace: helloworld
+    labels:
+      app: helloworld-gateway
+  http:
+    - name: hello
+      port: 443
+      hostname: hello.world
+      tls:
+        mode: SIMPLE
+        secretName: helloworld-certs
+      routing:
+        rules:
+          - route:
+              host: helloworld/helloworld.helloworld.svc.cluster.local
+    - name: hello-foo
+      port: 443
+      hostname: foo.hello.world
+      tls:
+        mode: SIMPLE
+        secretName: helloworld-certs
+      routing:
+        rules:
+          - route:
+              host: helloworld/helloworld.helloworld.svc.cluster.local
+---
+apiVersion: traffic.tsb.tetrate.io/v2
+kind: ServiceRoute
+metadata:
+  name: hello
+  group: helloworld
+  workspace: helloworld
+  tenant: tetrate
+  organization: tetrate
+spec:
+  service: helloworld/helloworld.helloworld.svc.cluster.local
+  subsets:
+    - name: v1
+      labels:
+        version: v1
+      weight: 80
+    - name: v2
+      labels:
+        version: v2
+      weight: 20
+---
+apiVersion: traffic.tsb.tetrate.io/v2
+kind: TrafficSetting
+metadata:
+  name: defaults
+  group: helloworld
+  workspace: helloworld
+  tenant: tetrate
+  organization: tetrate
+spec:
+  reachability:
+    mode: GROUP
+  resilience:
+    circuitBreakerSensitivity: MEDIUM
+---
+apiVersion: security.tsb.tetrate.io/v2
+kind: SecuritySetting
+metadata:
+  name: defaults
+  group: helloworld
+  workspace: helloworld
+  tenant: tetrate
+  organization: tetrate
+spec:
+  authentication: REQUIRED
+  authorization:
+    mode: GROUP

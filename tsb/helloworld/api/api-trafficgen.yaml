@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-trafficgenerator
+  labels:
+    app: api-rafficgenerator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api-trafficgenerator
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/inject: "false"
+      labels:
+        app: api-trafficgenerator
+    spec:
+      containers:
+        - name: trafficgenerator
+          image: appropriate/curl
+          args:
+            - /bin/sh
+            - -c
+            - |
+               IGW_IP=<SET INGRESS IP HERE>
+               while :; do
+                 echo "hello.world: "
+                 curl -kL "https://hello.world/hello" --resolve "hello.world:443:${IGW_IP}" 2>/dev/null
+                 echo "plain.hello.world: "
+                 curl -vL "http://plain.hello.world/hello" --resolve "plain.hello.world:80:${IGW_IP}" 2>/dev/null
+                 echo "redirect: "
+                 curl -vL "http://plain.hello.world/v2/hello" --resolve "plain.hello.world:80:${IGW_IP}" 2>/dev/null
+                 sleep 10
+               done
