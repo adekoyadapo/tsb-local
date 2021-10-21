@@ -105,6 +105,7 @@ bookinfo_app: kx-cp
 	tctl apply -f tsb/bookinfo/workspace.yaml
 	tctl apply -f tsb/bookinfo/groups.yaml;
 	tctl apply -f tsb/bookinfo/gateway.yaml;
+	sleep 60;
 
 
 traffic_gen: kx-cp
