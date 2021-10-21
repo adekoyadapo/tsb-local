@@ -5,7 +5,7 @@ endif
 
 tsb: mgt mgt-prereq mgt-setup ctr kx-mp cp-setup output
 
-tsb-app: mgt mgt-prereq mgt-setup ctr kx-mp cp-setup output bookinfo_app traffic_gen
+tsb-app: mgt mgt-prereq mgt-setup ctr kx-mp cp-setup kx-mp output bookinfo_app traffic_gen
 
 tctl_version :=$(shell /usr/local/bin/tctl version --local-only | awk '{print substr($$3,2)}')
 
@@ -96,13 +96,11 @@ kx-cp:
 
 bookinfo_app: kx-cp
 	@sleep 5;
-	kubectl create namespace bookinfo;
-	kubectl label ns bookinfo istio-injection=enabled --overwrite;
 	kubectl apply -f tsb/bookinfo/bookinfo.yml -n bookinfo;
 	kubectl apply -f tsb/bookinfo/ingress.yaml -n bookinfo;
 	kubectl create secret tls bookinfo-certs \
-		--key tsb/bookinfo.key \
-		--cert tsb/bookinfo.crt -n bookinfo;
+		--key tsb/bookinfo/bookinfo.key \
+		--cert tsb/bookinfo/bookinfo.crt -n bookinfo;
 	tctl apply -f tsb/bookinfo/tenant.yaml;
 	tctl apply -f tsb/bookinfo/workspace.yaml
 	tctl apply -f tsb/bookinfo/groups.yaml;
