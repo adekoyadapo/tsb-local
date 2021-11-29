@@ -1,4 +1,4 @@
 .env
 .DS_Store
 *secret*.yaml
-*operators*.yaml
+*operator*.yaml
