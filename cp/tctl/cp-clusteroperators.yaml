@@ -146,6 +146,12 @@ rules:
   verbs:
   - '*'
 - apiGroups:
+  - networking.k8s.io
+  resources:
+  - networkpolicies
+  verbs:
+  - '*'
+- apiGroups:
   - ""
   resources:
   - configmaps
@@ -250,7 +256,7 @@ spec:
               fieldPath: metadata.namespace
         - name: OPERATOR_NAME
           value: tsb-operator
-        image: '10-0-10-10.sslip.io:5050/tsboperator-server:1.4.0-EA7'
+        image: '10-0-10-10.sslip.io:5050/tsboperator-server:1.4.0'
         imagePullPolicy: IfNotPresent
         name: tsb-operator
         resources:
@@ -410,6 +416,12 @@ rules:
   verbs:
   - '*'
 - apiGroups:
+  - networking.k8s.io
+  resources:
+  - networkpolicies
+  verbs:
+  - '*'
+- apiGroups:
   - ""
   resources:
   - configmaps
@@ -514,7 +526,7 @@ spec:
               fieldPath: metadata.namespace
         - name: OPERATOR_NAME
           value: tsb-operator
-        image: '10-0-10-10.sslip.io:5050/tsboperator-server:1.4.0-EA7'
+        image: '10-0-10-10.sslip.io:5050/tsboperator-server:1.4.0'
         imagePullPolicy: IfNotPresent
         name: tsb-operator
         resources:

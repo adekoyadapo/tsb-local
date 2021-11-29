@@ -5,7 +5,7 @@ endif
 
 tsb: mgt mgt-prereq mgt-setup ctr kx-mp cp-setup output
 
-tsb-app: mgt mgt-prereq mgt-setup ctr kx-mp cp-setup kx-mp output bookinfo_app traffic_gen
+tsb-app: mgt mgt-prereq mgt-setup ctr kx-mp cp-setup bookinfo_app traffic_gen kx-mp output traffic_gen
 
 tctl_version :=$(shell /usr/local/bin/tctl version --local-only | awk '{print substr($$3,2)}')
 
@@ -25,34 +25,34 @@ mgt: check-env
 mgt-prereq:
 	@kubectx mp >> /dev/null;
 	helm repo add jetstack https://charts.jetstack.io;
-	helm install certmanager -n  cert-manager jetstack/cert-manager \
+	helm upgrade --install certmanager -n  cert-manager jetstack/cert-manager \
 		--namespace cert-manager \
 		--create-namespace \
 		--set installCRDs=true;
-#	kubectl apply -f cert-manager/cert-manager.yaml;
-	kubectl wait --for=condition=available --timeout=200s --all deployments -n cert-manager;
-	kubectl apply -f elastic/eck-all-in-one.yaml;
-	kubectl wait --for=condition=ready --timeout=200s --all pods -n elastic-system;
-	kubectl apply -f elastic/es.yaml;
-	sleep 30;
-	kubectl wait --for=condition=ready --timeout=200s --all pods -n elastic-system;
-	tctl install manifest management-plane-operator \
+#	@kubectl apply -f cert-manager/cert-manager.yaml;
+	@kubectl wait --for=condition=available --timeout=200s --all deployments -n cert-manager;
+	@kubectl apply -f elastic/eck-all-in-one.yaml;
+	@kubectl wait --for=condition=ready --timeout=200s --all pods -n elastic-system;
+	@kubectl apply -f elastic/es.yaml;
+	@sleep 30;
+	@kubectl wait --for=condition=ready --timeout=200s --all pods -n elastic-system;
+	@tctl install manifest management-plane-operator \
 	  --registry ${registry} | kubectl apply -f -;
-	kubectl wait --for=condition=available --timeout=120s --all deployments -n tsb;
-	kubectl wait --for=condition=ready --timeout=300s --all pods -n elastic-system;
-	kubectl apply -f mp/tsb-server-crt.yaml;
-	kubectl wait --for=condition=ready --timeout=120s --all pods -n tsb;
+	@kubectl wait --for=condition=available --timeout=120s --all deployments -n tsb;
+	@kubectl wait --for=condition=ready --timeout=300s --all pods -n elastic-system;
+	@kubectl apply -f mp/tsb-server-crt.yaml;
+	@kubectl wait --for=condition=ready --timeout=120s --all pods -n tsb;
 
 mgt-setup:
 	$(eval elastic_host :=$(shell kubectl -n elastic-system get service tsb-es-http -o jsonpath='{.status.loadBalancer.ingress[0].ip}'))
 	mp/tctl-management-plane-secrets.sh;
-	kubectl apply -f mp/tctl/managementplanesecrets.yaml;
-	sleep 20;
+	@kubectl apply -f mp/tctl/managementplanesecrets.yaml;
+	@sleep 20;
 	@envsubst < mp/managementplane-minikube.yaml | kubectl apply -f -;
-	sleep 20;
-	kubectl wait --for=condition=available --timeout=300s --all deployments -n tsb;
-	kubectl create job -n tsb teamsync-bootstrap --from=cronjob/teamsync;
-	sleep 30;
+	@sleep 30;
+	@kubectl wait --for=condition=available --timeout=300s --all deployments -n tsb;
+	@kubectl create job -n tsb teamsync-bootstrap --from=cronjob/teamsync;
+	@sleep 30;
 
 ctr: check-env
 	minikube start --kubernetes-version=$(k8s) --memory=8192 \
@@ -62,50 +62,50 @@ ctr: check-env
 
 kx-mp:
 	@kubectx mp >> /dev/null;
-	@sleep 3
+	@sleep 5;
 
 cp-setup:
 	$(eval tctl_host :=$(shell kubectl -n tsb get service envoy -o jsonpath='{.status.loadBalancer.ingress[0].ip}'))
 	$(eval elastic_host :=$(shell kubectl -n elastic-system get service tsb-es-http -o jsonpath='{.status.loadBalancer.ingress[0].ip}'))
 	cp/tctl-control-plane.sh;
 	@kubectx cp >> /dev/null;
-	kubectl apply -f cp/tctl/${cluster_name}-clusteroperators.yaml;
-	sleep 20;
-	kubectl wait --for=condition=available --timeout=120s --all deployments -n istio-system;
-	kubectl apply -f cp/tctl/${cluster_name}-controlplane-secrets.yaml;
-	sleep 20;
+	@kubectl apply -f cp/tctl/${cluster_name}-clusteroperators.yaml;
+	@sleep 20;
+	@kubectl wait --for=condition=available --timeout=120s --all deployments -n istio-system;
+	@kubectl apply -f cp/tctl/${cluster_name}-controlplane-secrets.yaml;
+	@sleep 20;
 	@envsubst < cp/controlplane.yaml | kubectl apply -f -;
-	sleep 20;
-	kubectl wait --for=condition=available --timeout=300s --all deployments -n istio-system;
+	@sleep 20;
+	@kubectl wait --for=condition=available --timeout=300s --all deployments -n istio-system;
 	@sleep 60;
 
 destroy_mp:
-	-@kubectx mp >> /dev/null;
-	kubectl delete -f mp/elastic/es.yaml --wait=true;
-	kubectl delete -f mp/elastic/eck-all-in-one.yaml --wait=true;
-	kubectl delete -f mp/cert-manager/certmanager.yaml --wait=true;
+	@kubectx mp >> /dev/null;
+	@kubectl delete -f mp/elastic/es.yaml --wait=true;
+	@kubectl delete -f mp/elastic/eck-all-in-one.yaml --wait=true;
+	@kubectl delete -f mp/cert-manager/certmanager.yaml --wait=true;
 
 output: kx-mp
-	-@sleep 3;
-	-@echo "Visit https://$(shell kubectl -n tsb get service envoy -o jsonpath='{.status.loadBalancer.ingress[0].ip}'):8443"
-	-@echo "Credentials\n username: admin \n password: admin"
+	$(eval tctl_host :=$(shell kubectl -n tsb get service envoy -o jsonpath='{.status.loadBalancer.ingress[0].ip}'))
+	@echo "Visit https://${tctl_host}:8443"
+	@echo "Credentials\n username: admin \n password: admin"
 
 kx-cp:
 	@kubectx cp >> /dev/null;
-	@sleep 3
+	@sleep 3;
 
 bookinfo_app: kx-cp
 	@sleep 5;
-	kubectl apply -f tsb/bookinfo/bookinfo.yml -n bookinfo;
-	kubectl apply -f tsb/bookinfo/ingress.yaml -n bookinfo;
-	kubectl create secret tls bookinfo-certs \
+	@kubectl apply -f tsb/bookinfo/bookinfo.yml -n bookinfo;
+	@kubectl apply -f tsb/bookinfo/ingress.yaml -n bookinfo;
+	@kubectl create secret tls bookinfo-certs \
 		--key tsb/bookinfo/bookinfo.key \
 		--cert tsb/bookinfo/bookinfo.crt -n bookinfo;
 	tctl apply -f tsb/bookinfo/tenant.yaml;
 	tctl apply -f tsb/bookinfo/workspace.yaml
 	tctl apply -f tsb/bookinfo/groups.yaml;
 	tctl apply -f tsb/bookinfo/gateway.yaml;
-	sleep 60;
+	@sleep 60;
 
 
 traffic_gen: kx-cp

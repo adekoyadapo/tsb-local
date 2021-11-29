@@ -7,6 +7,9 @@ Ensure the folowing is installed and available
 `Client Version: v1.21.1`
 - tctl version
 `1.4.0 +`
+- Kubectx from [here](https://github.com/ahmetb/kubectx)
+- helm 
+`version 3`
 ### Deployment
 1. Create .env file and ensure the following are populated
 ```
