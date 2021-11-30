@@ -29,11 +29,3 @@ spec:
           - path: spec.components.centralServer.kubeSpec.service.annotations
             value:
               metallb.universe.tf/address-pool: tsb
-          - path: spec.components.edgeServer.kubeSpec.overlays
-            value:
-            - apiVersion: v1
-              kind: Service
-              name: xcp-edge
-              patches:
-              - path: spec.type
-                value: LoadBalancer

@@ -78,12 +78,14 @@ cp-setup:
 	@sleep 20;
 	@kubectl wait --for=condition=available --timeout=300s --all deployments -n istio-system;
 	@sleep 60;
+	@kubectx mp >> /dev/null;	
 
 destroy_mp:
 	@kubectx mp >> /dev/null;
 	@kubectl delete -f mp/elastic/es.yaml --wait=true;
 	@kubectl delete -f mp/elastic/eck-all-in-one.yaml --wait=true;
 	@kubectl delete -f mp/cert-manager/certmanager.yaml --wait=true;
+	@sleep 10;
 
 output: kx-mp
 	$(eval tctl_host :=$(shell kubectl -n tsb get service envoy -o jsonpath='{.status.loadBalancer.ingress[0].ip}'))
