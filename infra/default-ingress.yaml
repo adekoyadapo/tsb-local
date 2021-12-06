@@ -1,0 +1,17 @@
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+metadata:
+  name: default-gateway
+  namespace: istio-system
+spec:
+  profile: empty
+  components:
+    ingressGateways:
+      - namespace: default
+        name: ilb-gateway
+        enabled: true
+        label:
+          istio: ilb-gateway
+        k8s:
+          serviceAnnotations:
+            metallb.universe.tf/address-pool: "tsb"

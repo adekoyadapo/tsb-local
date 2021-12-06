@@ -18,10 +18,23 @@ image-sync: check-env
 	tctl install image-sync --username $(username) --apikey $(apikey) --registry $(reg)
 
 mgt: check-env
-	minikube start --kubernetes-version=$(k8s) --memory=8192 \
-		--cpus=8 --driver=hyperkit --addons="metallb,metrics-server" \
-		--insecure-registry $(reg) -p mp \
-		&& sleep 20 && kubectl apply -f mp/metallb-config.yaml
+	@minikube start --kubernetes-version=$(k8s) --memory=8192 \
+		--cpus=8 --addons="metallb,metrics-server" \
+		--insecure-registry $(reg) -p ${mp_cluster_name} >> /dev/null 2>&1
+	@kubectl wait --for=condition=available --timeout=300s --all deployments -A >> /dev/null
+	@kubectl wait --for=condition=ready --timeout=300s --all pods -A >> /dev/null
+	$(eval cluster :=${mp_cluster_name})
+	@envsubst < .env > tmp
+
+metallb_mp:
+	@echo "Getting the cluster IP and creating loadBalancer IP ranges..."
+	$(eval metallbip :=$(shell infra/nextip.sh))
+	$(eval metallbip2 :=$(shell infra/nextip2.sh))
+	@envsubst < infra/metallb-config.yaml | kubectl apply -f - >> /dev/null
+	@echo "loadBalancer IP ranges configured..."
+	@echo "default range ${metallbip}"
+	@echo "extra range ${metallbip2}";
+
 mgt-prereq:
 	@kubectx mp >> /dev/null;
 	helm repo add jetstack https://charts.jetstack.io;
@@ -47,18 +60,30 @@ mgt-setup:
 	$(eval elastic_host :=$(shell kubectl -n elastic-system get service tsb-es-http -o jsonpath='{.status.loadBalancer.ingress[0].ip}'))
 	mp/tctl-management-plane-secrets.sh;
 	@kubectl apply -f mp/tctl/managementplanesecrets.yaml;
-	@sleep 20;
 	@envsubst < mp/managementplane-minikube.yaml | kubectl apply -f -;
 	@sleep 30;
-	@kubectl wait --for=condition=available --timeout=300s --all deployments -n tsb;
+	@kubectl wait --for=condition=available --timeout=600s --all deployments -n tsb;
 	@kubectl create job -n tsb teamsync-bootstrap --from=cronjob/teamsync;
-	@sleep 30;
+	@kubectl wait --for=condition=ready --timeout=500s --all pods -n tsb
 
 ctr: check-env
-	minikube start --kubernetes-version=$(k8s) --memory=8192 \
-		--cpus=8 --driver=hyperkit --addons="metallb,metrics-server" \
-		--insecure-registry $(reg) -p cp \
-		&& sleep 20 && kubectl apply -f cp/metallb-config.yaml;
+	@minikube start --kubernetes-version=$(k8s) --memory=8192 \
+		--cpus=8 --addons="metallb,metrics-server" \
+		--insecure-registry $(reg) -p ${cluster_name} >> /dev/null 2>&1
+	@kubectl wait --for=condition=available --timeout=300s --all deployments -A >> /dev/null
+	@kubectl wait --for=condition=ready --timeout=300s --all pods -A >> /dev/null
+	$(eval cluster :=${cluster_name})
+	@envsubst < .env > tmp
+
+metallb_cp:
+	@echo "Getting the cluster IP and creating loadBalancer IP ranges..."
+	$(eval metallbip :=$(shell infra/nextip-cp.sh))
+	$(eval metallbip2 :=$(shell infra/nextip-cp2.sh))
+	@envsubst < infra/metallb-config.yaml | kubectl apply -f - >> /dev/null
+	@echo "loadBalancer IP ranges configured..."
+	@echo "default range ${metallbip}"
+	@echo "extra range ${metallbip2}";
+
 
 kx-mp:
 	@kubectx mp >> /dev/null;
@@ -69,15 +94,15 @@ cp-setup:
 	$(eval elastic_host :=$(shell kubectl -n elastic-system get service tsb-es-http -o jsonpath='{.status.loadBalancer.ingress[0].ip}'))
 	cp/tctl-control-plane.sh;
 	@kubectx cp >> /dev/null;
+	@sleep 10
 	@kubectl apply -f cp/tctl/${cluster_name}-clusteroperators.yaml;
-	@sleep 20;
 	@kubectl wait --for=condition=available --timeout=120s --all deployments -n istio-system;
+	@kubectl wait --for=condition=ready --timeout=300s --all pods -n istio-system;
 	@kubectl apply -f cp/tctl/${cluster_name}-controlplane-secrets.yaml;
-	@sleep 20;
+	@sleep 5;
 	@envsubst < cp/controlplane.yaml | kubectl apply -f -;
-	@sleep 20;
 	@kubectl wait --for=condition=available --timeout=300s --all deployments -n istio-system;
-	@sleep 60;
+	@kubectl wait --for=condition=ready --timeout=300s --all pods -n istio-system;
 	@kubectx mp >> /dev/null;	
 
 destroy_mp:
@@ -131,4 +156,6 @@ test:
 	-@echo ${elastic_host}
 	-@echo ${tctl_host}
 destroy:
-	minikube delete --all
+	@minikube delete --all >> /dev/null 2>&1
+	@rm -rf tmp 
+
