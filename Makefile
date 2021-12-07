@@ -20,8 +20,10 @@ image-sync: check-env
 mgt: check-env
 	@echo "===========================";
 	@echo "Creating MGT cluster";
-	@minikube start --kubernetes-version=$(k8s) --memory=16384 \
-		--cpus=8 --addons="metallb,metrics-server" \
+	@minikube start --kubernetes-version=$(k8s) --memory=8172 \
+		--cpus=4 --addons="metallb,metrics-server" \
+		--container-runtime=docker \
+		--driver=kvm2 \
 		--insecure-registry $(reg) -p ${mp_cluster_name} >> /dev/null 2>&1
 	@kubectl wait --for=condition=available --timeout=300s --all deployments -A >> /dev/null
 	@kubectl wait --for=condition=ready --timeout=300s --all pods -A >> /dev/null
@@ -54,11 +56,13 @@ mgt-prereq:
 	@echo "certmanager deployed...";
 	@echo "Creating elasticsearch";
 	@kubectl apply -f elastic/eck-all-in-one.yaml >> /dev/null 2>&1;
-	@sleep 10;
+	@sleep 30;
 	@kubectl wait --for=condition=ready --timeout=200s --all pods -n elastic-system >> /dev/null;
 	@kubectl apply -f elastic/es.yaml >> /dev/null;
-	@sleep 10;
+	@sleep 30;
+	@echo "waiting for elasticsearch... This can take up to 5min(s)"
 	@kubectl wait --for=condition=ready --timeout=600s --all pods -n elastic-system >> /dev/null;
+	@sleep 300s;
 	@echo "elasticsearch deployed...";
 	@echo "===========================";
 	@echo "Setting up managementplane";
@@ -99,8 +103,10 @@ ctr-deploy:
 ctr: SHELL:=/bin/bash
 ctr: check-env
 	num=1 ; while [[ $$num -le ${cp_num} ]] ; \
-	do minikube start --kubernetes-version=$(k8s) --memory=8192 \
-		--cpus=8 --addons="metallb,metrics-server" \
+	do minikube start --kubernetes-version=$(k8s) --memory=16384 \
+		--cpus=6 --addons="metallb,metrics-server" \
+		--container-runtime=docker \
+		--driver=kvm2 \
 		--insecure-registry $(reg) -p ${prefix}-$$num >> /dev/null 2>&1; \
 	    kubectl wait --for=condition=available --timeout=300s --all deployments -A >> /dev/null; \
 	    kubectl wait --for=condition=ready --timeout=300s --all pods -A >> /dev/null ; \
@@ -150,21 +156,24 @@ output: kx-mp
 	@echo " username: admin"
 	@echo " password: admin"
 
-kx-cp:
-	@kubectx cp >> /dev/null;
-	@sleep 3;
 
-bookinfo_app: kx-cp
-	@sleep 5;
-	@kubectl apply -f tsb/bookinfo/bookinfo.yml -n bookinfo;
-	@kubectl apply -f tsb/bookinfo/ingress.yaml -n bookinfo;
+bookinfo_app:
+	@echo "===========================";
+	@echo "Deploying bookinfo app...";
+	@kubectl apply -f tsb/bookinfo/bookinfo.yml -n bookinfo >> /dev/null;
+	@kubectl apply -f tsb/bookinfo/ingress.yaml -n bookinfo >> /dev/null;
+	@kubectl wait --for=condition=available --timeout=300s --all deployments -n bookinfo >> /dev/null;
+	@kubectl wait --for=condition=ready --timeout=300s --all pods -n bookinfo >> /dev/null;
 	@kubectl create secret tls bookinfo-certs \
 		--key tsb/bookinfo/bookinfo.key \
-		--cert tsb/bookinfo/bookinfo.crt -n bookinfo;
-	tctl apply -f tsb/bookinfo/tenant.yaml;
-	tctl apply -f tsb/bookinfo/workspace.yaml
-	tctl apply -f tsb/bookinfo/groups.yaml;
-	tctl apply -f tsb/bookinfo/gateway.yaml;
+		--cert tsb/bookinfo/bookinfo.crt -n bookinfo >> /dev/null;
+	@echo "bookinfo deployed...";
+
+bookinfo_app_tsb:
+	@tctl apply -f tsb/bookinfo/tenant.yaml;
+	@tctl apply -f tsb/bookinfo/workspace.yaml
+	@tctl apply -f tsb/bookinfo/groups.yaml;
+	@tctl apply -f tsb/bookinfo/gateway.yaml;
 	@sleep 60;
 
 

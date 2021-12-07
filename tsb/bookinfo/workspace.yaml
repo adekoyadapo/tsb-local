@@ -7,4 +7,4 @@ metadata:
 spec:
   namespaceSelector:
     names:
-      - "cp/bookinfo"
+      - "*/bookinfo"
