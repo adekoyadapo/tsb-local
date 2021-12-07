@@ -3,7 +3,7 @@ ifneq (,$(wildcard ./.env))
     export
 endif
 
-tsb: mgt mgt-prereq mgt-setup ctr kx-mp cp-setup output
+tsb: mgt mgt-prereq mgt-setup ctr-deploy output
 
 tsb-app: mgt mgt-prereq mgt-setup ctr kx-mp cp-setup bookinfo_app traffic_gen kx-mp output traffic_gen
 
@@ -18,15 +18,20 @@ image-sync: check-env
 	tctl install image-sync --username $(username) --apikey $(apikey) --registry $(reg)
 
 mgt: check-env
-	@minikube start --kubernetes-version=$(k8s) --memory=8192 \
+	@echo "===========================";
+	@echo "Creating MGT cluster";
+	@minikube start --kubernetes-version=$(k8s) --memory=16384 \
 		--cpus=8 --addons="metallb,metrics-server" \
 		--insecure-registry $(reg) -p ${mp_cluster_name} >> /dev/null 2>&1
 	@kubectl wait --for=condition=available --timeout=300s --all deployments -A >> /dev/null
 	@kubectl wait --for=condition=ready --timeout=300s --all pods -A >> /dev/null
+	@echo "MGT cluster created";
 	$(eval cluster :=${mp_cluster_name})
 	@envsubst < .env > tmp
+	@echo "Creating loadBalancer IP pool";
+	@${MAKE} metallb >> /dev/null 
 
-metallb_mp:
+metallb:
 	@echo "Getting the cluster IP and creating loadBalancer IP ranges..."
 	$(eval metallbip :=$(shell infra/nextip.sh))
 	$(eval metallbip2 :=$(shell infra/nextip2.sh))
@@ -36,74 +41,98 @@ metallb_mp:
 	@echo "extra range ${metallbip2}";
 
 mgt-prereq:
-	@kubectx mp >> /dev/null;
-	helm repo add jetstack https://charts.jetstack.io;
-	helm upgrade --install certmanager -n  cert-manager jetstack/cert-manager \
+	@echo "===========================";
+	@echo "Creating MGT prereq, certmanager and elasticsearch";
+	@kubectx ${mp_cluster_name} >> /dev/null;
+	@echo "Creating certmanager...";
+	@helm repo add jetstack https://charts.jetstack.io >> /dev/null;
+	@helm upgrade --install certmanager -n  cert-manager jetstack/cert-manager \
 		--namespace cert-manager \
 		--create-namespace \
-		--set installCRDs=true;
-#	@kubectl apply -f cert-manager/cert-manager.yaml;
-	@kubectl wait --for=condition=available --timeout=200s --all deployments -n cert-manager;
-	@kubectl apply -f elastic/eck-all-in-one.yaml;
-	@kubectl wait --for=condition=ready --timeout=200s --all pods -n elastic-system;
-	@kubectl apply -f elastic/es.yaml;
-	@sleep 30;
-	@kubectl wait --for=condition=ready --timeout=200s --all pods -n elastic-system;
+		--set installCRDs=true >> /dev/null;
+	@kubectl wait --for=condition=available --timeout=200s --all deployments -n cert-manager >> /dev/null;
+	@echo "certmanager deployed...";
+	@echo "Creating elasticsearch";
+	@kubectl apply -f elastic/eck-all-in-one.yaml >> /dev/null 2>&1;
+	@sleep 10;
+	@kubectl wait --for=condition=ready --timeout=200s --all pods -n elastic-system >> /dev/null;
+	@kubectl apply -f elastic/es.yaml >> /dev/null;
+	@sleep 10;
+	@kubectl wait --for=condition=ready --timeout=600s --all pods -n elastic-system >> /dev/null;
+	@echo "elasticsearch deployed...";
+	@echo "===========================";
+	@echo "Setting up managementplane";
 	@tctl install manifest management-plane-operator \
-	  --registry ${registry} | kubectl apply -f -;
-	@kubectl wait --for=condition=available --timeout=120s --all deployments -n tsb;
-	@kubectl wait --for=condition=ready --timeout=300s --all pods -n elastic-system;
-	@kubectl apply -f mp/tsb-server-crt.yaml;
-	@kubectl wait --for=condition=ready --timeout=120s --all pods -n tsb;
+	  --registry ${registry} | kubectl apply -f - >> /dev/null;
+	@kubectl wait --for=condition=available --timeout=120s --all deployments -n tsb >> /dev/null;
+	@kubectl wait --for=condition=ready --timeout=300s --all pods -n elastic-system >> /dev/null;
+	@kubectl apply -f mp/tsb-server-crt.yaml >> /dev/null;
+	@kubectl wait --for=condition=ready --timeout=120s --all pods -n tsb >> /dev/null;
+	@echo "managementplane setup complete...";
 
-mgt-setup:
+mgt-setup: kx-mp
+	@echo "===========================";
+	@echo "Deploying managementplane...";
 	$(eval elastic_host :=$(shell kubectl -n elastic-system get service tsb-es-http -o jsonpath='{.status.loadBalancer.ingress[0].ip}'))
-	mp/tctl-management-plane-secrets.sh;
-	@kubectl apply -f mp/tctl/managementplanesecrets.yaml;
-	@envsubst < mp/managementplane-minikube.yaml | kubectl apply -f -;
+	@mp/tctl-management-plane-secrets.sh >> /dev/null;
+	@kubectl apply -f mp/tctl/managementplanesecrets.yaml >> /dev/null;
+	@envsubst < mp/managementplane-minikube.yaml | kubectl apply -f - >> /dev/null;
 	@sleep 30;
-	@kubectl wait --for=condition=available --timeout=600s --all deployments -n tsb;
-	@kubectl create job -n tsb teamsync-bootstrap --from=cronjob/teamsync;
-	@kubectl wait --for=condition=ready --timeout=500s --all pods -n tsb
+	@echo "waiting for managementplane...";
+	@kubectl wait --for=condition=available --timeout=600s --all deployments -n tsb >> /dev/null;
+	@kubectl create job -n tsb teamsync-bootstrap --from=cronjob/teamsync >> /dev/null;
+	@kubectl wait --for=condition=ready --timeout=500s --all pods -n tsb >> /dev/null
+	@echo "managementplane deployed...";
 
+ctr-deploy: 
+	@echo "===========================";
+	@echo "Creating controlplane clusters...";
+	@${MAKE} ctr >> /dev/null;
+	@echo "${cp_num} Controlplane clusters created ...";
+	@${MAKE} kx-mp >> /dev/null;
+	@echo "===========================";
+	@echo "deploying controlplane...";
+	@${MAKE} cp-setup >> /dev/null;
+	@echo "Controlplane... deployed";
+
+
+ctr: SHELL:=/bin/bash
 ctr: check-env
-	@minikube start --kubernetes-version=$(k8s) --memory=8192 \
+	num=1 ; while [[ $$num -le ${cp_num} ]] ; \
+	do minikube start --kubernetes-version=$(k8s) --memory=8192 \
 		--cpus=8 --addons="metallb,metrics-server" \
-		--insecure-registry $(reg) -p ${cluster_name} >> /dev/null 2>&1
-	@kubectl wait --for=condition=available --timeout=300s --all deployments -A >> /dev/null
-	@kubectl wait --for=condition=ready --timeout=300s --all pods -A >> /dev/null
-	$(eval cluster :=${cluster_name})
-	@envsubst < .env > tmp
-
-metallb_cp:
-	@echo "Getting the cluster IP and creating loadBalancer IP ranges..."
-	$(eval metallbip :=$(shell infra/nextip-cp.sh))
-	$(eval metallbip2 :=$(shell infra/nextip-cp2.sh))
-	@envsubst < infra/metallb-config.yaml | kubectl apply -f - >> /dev/null
-	@echo "loadBalancer IP ranges configured..."
-	@echo "default range ${metallbip}"
-	@echo "extra range ${metallbip2}";
-
+		--insecure-registry $(reg) -p ${prefix}-$$num >> /dev/null 2>&1; \
+	    kubectl wait --for=condition=available --timeout=300s --all deployments -A >> /dev/null; \
+	    kubectl wait --for=condition=ready --timeout=300s --all pods -A >> /dev/null ; \
+	    export cluster=${prefix}-$$num; \
+	    envsubst < .env > tmp; \
+		${MAKE} metallb >> /dev/null ; \
+		((num = num + 1)) ;\
+	done
 
 kx-mp:
-	@kubectx mp >> /dev/null;
+	@kubectx ${mp_cluster_name} >> /dev/null;
 	@sleep 5;
 
-cp-setup:
+cp-setup: kx-mp
 	$(eval tctl_host :=$(shell kubectl -n tsb get service envoy -o jsonpath='{.status.loadBalancer.ingress[0].ip}'))
 	$(eval elastic_host :=$(shell kubectl -n elastic-system get service tsb-es-http -o jsonpath='{.status.loadBalancer.ingress[0].ip}'))
-	cp/tctl-control-plane.sh;
-	@kubectx cp >> /dev/null;
-	@sleep 10
-	@kubectl apply -f cp/tctl/${cluster_name}-clusteroperators.yaml;
-	@kubectl wait --for=condition=available --timeout=120s --all deployments -n istio-system;
-	@kubectl wait --for=condition=ready --timeout=300s --all pods -n istio-system;
-	@kubectl apply -f cp/tctl/${cluster_name}-controlplane-secrets.yaml;
-	@sleep 5;
-	@envsubst < cp/controlplane.yaml | kubectl apply -f -;
-	@kubectl wait --for=condition=available --timeout=300s --all deployments -n istio-system;
-	@kubectl wait --for=condition=ready --timeout=300s --all pods -n istio-system;
-	@kubectx mp >> /dev/null;	
+	num=1 ; while [[ $$num -le ${cp_num} ]] ; \
+	do export cluster=${prefix}-$$num; \
+	   cp/tctl-control-plane.sh; \
+	   kubectx ${prefix}-$$num >> /dev/null; \
+	   sleep 10; \
+	   kubectl apply -f cp/tctl/${prefix}-$$num-clusteroperators.yaml >> /dev/null; \
+	   kubectl wait --for=condition=available --timeout=120s --all deployments -n istio-system >> /dev/null; \
+	   kubectl wait --for=condition=ready --timeout=300s --all pods -n istio-system >> /dev/null; \
+	   kubectl apply -f cp/tctl/${prefix}-$$num-controlplane-secrets.yaml >> /dev/null; \
+	   sleep 5; \
+	   envsubst < cp/controlplane.yaml | kubectl apply -f - >> /dev/null; \
+	   kubectl wait --for=condition=available --timeout=300s --all deployments -n istio-system >> /dev/null; \
+	   kubectl wait --for=condition=ready --timeout=300s --all pods -n istio-system >> /dev/null; \
+	   kubectx ${mp_cluster_name} >> /dev/null;	\
+	   ((num = num + 1)) ;\
+	done
 
 destroy_mp:
 	@kubectx mp >> /dev/null;
@@ -113,9 +142,13 @@ destroy_mp:
 	@sleep 10;
 
 output: kx-mp
+	@echo "===========================";
+	@echo "Getting Endpoints and Credentials...";
 	$(eval tctl_host :=$(shell kubectl -n tsb get service envoy -o jsonpath='{.status.loadBalancer.ingress[0].ip}'))
 	@echo "Visit https://${tctl_host}:8443"
-	@echo "Credentials\n username: admin \n password: admin"
+	@echo "Credentials"
+	@echo " username: admin"
+	@echo " password: admin"
 
 kx-cp:
 	@kubectx cp >> /dev/null;
@@ -156,6 +189,9 @@ test:
 	-@echo ${elastic_host}
 	-@echo ${tctl_host}
 destroy:
+	@echo "===========================";
+	@echo "removing clusters...";
 	@minikube delete --all >> /dev/null 2>&1
+	@echo "Cluster removed...";
 	@rm -rf tmp 
 

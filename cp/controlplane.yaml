@@ -16,7 +16,7 @@ spec:
   managementPlane:
     host: ${tctl_host}
     port: 8443
-    clusterName: ${cluster_name}
+    clusterName: ${cluster}
   meshExpansion: {}
   components:
     xcp:
