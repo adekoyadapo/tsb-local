@@ -19,14 +19,12 @@ reg=""         #local or remote registry to store containers which cluster can a
 registry=      #registry with no quotes
 cluster_name=  # name of control-plane cluster - found in kube-context
 mp_cluster_name= #name of management place cluster - found in kube-context
+cp_num= #number of controlplanes to deploy
+prefix= #prefix for the controlplane clusters
 ```
 2. Run make commands to setup the management plane and cluster
 ```
-make mgt
-make mgt-prereq
-make mgt-setup
-make ctr
-make cp-setup
+make tsb
 ```
 3. To destroy
 ```
