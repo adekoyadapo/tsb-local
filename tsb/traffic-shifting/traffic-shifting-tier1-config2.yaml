@@ -1,0 +1,37 @@
+apiVersion: gateway.tsb.tetrate.io/v2
+kind: Group
+metadata:
+  tenant: tetrate
+  organization: tetrate
+  workspace: tier1-workspace
+  name: tier1-gateway-group
+spec:
+  displayName: tier1-gateway-group
+  description: for tier1-gateway-group
+  namespaceSelector:
+    names:
+      - "cp-3/tier1"
+  configMode: BRIDGED
+---
+apiVersion: gateway.tsb.tetrate.io/v2
+kind: Tier1Gateway
+metadata:
+  name: tier1-gateway
+  group: tier1-gateway-group
+  workspace: tier1-workspace
+  tenant: tetrate
+  organization: tetrate
+spec:
+  workloadSelector:
+    namespace: tier1
+    labels:
+      app: tier1-gateway
+  externalServers:
+  - hostname: bookinfo.tetrate.com
+    name: bookinfo
+    port: 80
+    clusters:
+    - name: cp-1
+      weight: 90
+    - name: cp-2
+      weight: 10
