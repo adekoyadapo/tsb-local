@@ -19,8 +19,83 @@ spec:
     clusterName: ${cluster}
   meshExpansion: {}
   components:
+    collector:
+      kubeSpec:
+        deployment:
+          replicaCount: 1
+          resources:
+            limits:
+              cpu: 400m
+              memory: 400Mi
+            requests:
+              cpu: 200m
+              memory: 200Mi
+    hpaAdapter:
+      kubeSpec:
+        deployment:
+          replicaCount: 1
+          resources:
+            limits:
+              cpu: 400m
+              memory: 512Mi
+            requests:
+              cpu: 200m
+              memory: 256Mi
+        service:
+          type: ClusterIP
+    istio:
+      kubeSpec:
+        deployment:
+          hpaSpec:
+            maxReplicas: 10
+            metrics:
+            - resource:
+                name: cpu
+                targetAverageUtilization: 75
+              type: Resource
+            minReplicas: 1
+          replicaCount: 1
+          resources:
+            limits:
+              cpu: 400m
+              memory: 1024Mi
+            requests:
+              cpu: 200m
+              memory: 512Mi
+        overlays:
+        - apiVersion: install.istio.io/v1alpha1
+          kind: IstioOperator
+          name: tsb-istiocontrolplane
+          patches:
+          - path: spec.values.global.proxy
+            value:
+              resources:
+                limits:
+                  cpu: 120m
+                  memory: 256Mi
+                requests:
+                  cpu: 800m
+                  memory: 128Mi
+    oap:
+      kubeSpec:
+        deployment:
+          replicaCount: 1
+          resources:
+            limits:
+              memory: 1Gi
+            requests:
+              memory: 512Mi
     xcp:
       kubeSpec:
+        deployment:
+          replicaCount: 1
+          resources:
+            limits:
+              cpu: 200m
+              memory: 256Mi
+            requests:
+              cpu: 50m
+              memory: 128Mi
         overlays:
         - apiVersion: install.xcp.tetrate.io/v1alpha1
           kind: EdgeXcp
@@ -28,4 +103,4 @@ spec:
           patches:
           - path: spec.components.centralServer.kubeSpec.service.annotations
             value:
-              metallb.universe.tf/address-pool: tsb
+                metallb.universe.tf/address-pool: tsb

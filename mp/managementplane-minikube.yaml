@@ -15,16 +15,63 @@ spec:
       protocol: https
       selfSigned: true
   components:
+    collector:
+      kubeSpec:
+        deployment:
+          affinity:
+            podAntiAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+              - labelSelector:
+                  matchExpressions:
+                  - key: app.kubernetes.io/component
+                    operator: In
+                    values:
+                    - collector
+                topologyKey: kubernetes.io/hostname
+          replicaCount: 1
+          resources:
+            limits:
+              cpu: 400m
+              memory: 500Mi
+            requests:
+              cpu: 200m
+              memory: 256Mi
     apiServer:
       teamSyncSchedule: 0 * * * *
     frontEnvoy:
       kubeSpec:
+        deployment:
+          hpaSpec:
+            maxReplicas: 10
+            metrics:
+            - resource:
+                name: cpu
+                targetAverageUtilization: 75
+              type: Resource
+            minReplicas: 2
+          replicaCount: 2
+          resources:
+            limits:
+              cpu: "2"
+              memory: 1Gi
+            requests:
+              cpu: 100m
+              memory: 128Mi
         service:
           annotations:
             metallb.universe.tf/address-pool: tsb
           type: LoadBalancer
     xcp:
       kubeSpec:
+        deployment:
+          replicaCount: 1
+          resources:
+            limits:
+              cpu: 200m
+              memory: 256Mi
+            requests:
+              cpu: 50m
+              memory: 128Mi
         overlays:
         - apiVersion: install.xcp.tetrate.io/v1alpha1
           kind: CentralXcp
