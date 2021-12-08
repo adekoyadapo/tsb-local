@@ -20,10 +20,10 @@ image-sync: check-env
 mgt: check-env
 	@echo "===========================";
 	@echo "Creating MGT cluster";
-	@minikube start --kubernetes-version=$(k8s) --memory=8172 \
-		--cpus=4 --addons="metallb,metrics-server" \
+	@minikube start --kubernetes-version=$(k8s) --memory=${mp_mem} \
+		--cpus=${mp_cpu} --addons="metallb,metrics-server" \
 		--container-runtime=docker \
-		--driver=kvm2 \
+		--driver=podman \
 		--insecure-registry $(reg) -p ${mp_cluster_name} >> /dev/null 2>&1
 	@kubectl wait --for=condition=available --timeout=300s --all deployments -A >> /dev/null
 	@kubectl wait --for=condition=ready --timeout=300s --all pods -A >> /dev/null
@@ -61,8 +61,8 @@ mgt-prereq:
 	@kubectl apply -f elastic/es.yaml >> /dev/null;
 	@sleep 30;
 	@echo "waiting for elasticsearch... This can take up to 5min(s)"
+	@sleep 120s;
 	@kubectl wait --for=condition=ready --timeout=600s --all pods -n elastic-system >> /dev/null;
-	@sleep 300s;
 	@echo "elasticsearch deployed...";
 	@echo "===========================";
 	@echo "Setting up managementplane";
@@ -83,6 +83,7 @@ mgt-setup: kx-mp
 	@envsubst < mp/managementplane-minikube.yaml | kubectl apply -f - >> /dev/null;
 	@sleep 30;
 	@echo "waiting for managementplane...";
+	@sleep 120s;
 	@kubectl wait --for=condition=available --timeout=600s --all deployments -n tsb >> /dev/null;
 	@kubectl create job -n tsb teamsync-bootstrap --from=cronjob/teamsync >> /dev/null;
 	@kubectl wait --for=condition=ready --timeout=500s --all pods -n tsb >> /dev/null
@@ -103,10 +104,14 @@ ctr-deploy:
 ctr: SHELL:=/bin/bash
 ctr: check-env
 	num=1 ; while [[ $$num -le ${cp_num} ]] ; \
-	do minikube start --kubernetes-version=$(k8s) --memory=16384 \
-		--cpus=6 --addons="metallb,metrics-server" \
+	do  if [[ $$num = "3" ]]; then \
+	      export cp_cpu=4;\
+		  export cp_mem=8196; \
+		fi ; \
+	    minikube start --kubernetes-version=$(k8s) --memory=${cp_mem} \
+		--cpus=${cp_cpu} --addons="metallb,metrics-server" \
 		--container-runtime=docker \
-		--driver=kvm2 \
+		--driver=podman \
 		--insecure-registry $(reg) -p ${prefix}-$$num >> /dev/null 2>&1; \
 	    kubectl wait --for=condition=available --timeout=300s --all deployments -A >> /dev/null; \
 	    kubectl wait --for=condition=ready --timeout=300s --all pods -A >> /dev/null ; \
@@ -134,6 +139,7 @@ cp-setup: kx-mp
 	   kubectl apply -f cp/tctl/${prefix}-$$num-controlplane-secrets.yaml >> /dev/null; \
 	   sleep 5; \
 	   envsubst < cp/controlplane.yaml | kubectl apply -f - >> /dev/null; \
+	   sleep 120s; \
 	   kubectl wait --for=condition=available --timeout=300s --all deployments -n istio-system >> /dev/null; \
 	   kubectl wait --for=condition=ready --timeout=300s --all pods -n istio-system >> /dev/null; \
 	   kubectx ${mp_cluster_name} >> /dev/null;	\
@@ -175,7 +181,6 @@ bookinfo_app_tsb:
 	@tctl apply -f tsb/bookinfo/groups.yaml;
 	@tctl apply -f tsb/bookinfo/gateway.yaml;
 	@sleep 60;
-
 
 traffic_gen: kx-cp
 	$(eval bookinfo_gw :=$(shell kubectl -n bookinfo get service tsb-gateway-bookinfo -o jsonpath='{.status.loadBalancer.ingress[0].ip}'))

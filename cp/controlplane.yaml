@@ -19,30 +19,25 @@ spec:
     clusterName: ${cluster}
   meshExpansion: {}
   components:
-    collector:
+    xcp:
       kubeSpec:
         deployment:
           replicaCount: 1
           resources:
             limits:
-              cpu: 400m
-              memory: 400Mi
+              cpu: 100m
+              memory: 128Mi
             requests:
-              cpu: 200m
-              memory: 200Mi
-    hpaAdapter:
-      kubeSpec:
-        deployment:
-          replicaCount: 1
-          resources:
-            limits:
-              cpu: 400m
-              memory: 512Mi
-            requests:
-              cpu: 200m
-              memory: 256Mi
-        service:
-          type: ClusterIP
+              cpu: 50m
+              memory: 64Mi
+        overlays:
+        - apiVersion: install.xcp.tetrate.io/v1alpha1
+          kind: EdgeXcp
+          name: edge-xcp
+          patches:
+          - path: spec.components.centralServer.kubeSpec.service.annotations
+            value:
+              metallb.universe.tf/address-pool: tsb
     istio:
       kubeSpec:
         deployment:
@@ -57,11 +52,11 @@ spec:
           replicaCount: 1
           resources:
             limits:
-              cpu: 400m
-              memory: 1024Mi
-            requests:
               cpu: 200m
-              memory: 512Mi
+              memory: 256Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
         overlays:
         - apiVersion: install.istio.io/v1alpha1
           kind: IstioOperator
@@ -71,21 +66,23 @@ spec:
             value:
               resources:
                 limits:
-                  cpu: 120m
-                  memory: 256Mi
+                  cpu: 80m
+                  memory: 96Mi
                 requests:
-                  cpu: 800m
-                  memory: 128Mi
+                  cpu: 40m
+                  memory: 56Mi
     oap:
       kubeSpec:
         deployment:
           replicaCount: 1
           resources:
             limits:
-              memory: 1Gi
-            requests:
+              cpu: 500m
               memory: 512Mi
-    xcp:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+    hpaAdapter:
       kubeSpec:
         deployment:
           replicaCount: 1
@@ -94,13 +91,45 @@ spec:
               cpu: 200m
               memory: 256Mi
             requests:
-              cpu: 50m
+              cpu: 100m
               memory: 128Mi
-        overlays:
-        - apiVersion: install.xcp.tetrate.io/v1alpha1
-          kind: EdgeXcp
-          name: edge-xcp
-          patches:
-          - path: spec.components.centralServer.kubeSpec.service.annotations
-            value:
-                metallb.universe.tf/address-pool: tsb
+        service:
+          type: ClusterIP
+    onboarding:
+      operator:
+        kubeSpec:
+          deployment:
+            replicaCount: 1
+            resources:
+              limits:
+                cpu: 200m
+                memory: 256Mi
+              requests:
+                cpu: 50m
+                memory: 128Mi
+          service:
+            type: ClusterIP
+      repository:
+        kubeSpec:
+          deployment:
+            replicaCount: 1
+            resources:
+              limits:
+                cpu: 100m
+                memory: 100Mi
+              requests:
+                cpu: 10m
+                memory: 32Mi
+          service:
+            type: ClusterIP
+    collector:
+      kubeSpec:
+        deployment:
+          replicaCount: 1
+          resources:
+            limits:
+              cpu: 200m
+              memory: 256Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
